@@ -10,8 +10,6 @@ import urllib.request, urllib.error
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 RLABS_REPO   = "reversinglabs/reversinglabs-yara-rules"
-TREE_API     = f"https://api.github.com/repos/{RLABS_REPO}/git/trees/main?recursive=1"
-RAW_BASE     = f"https://raw.githubusercontent.com/{RLABS_REPO}/main/"
 
 PRIORITY_CATS = {
     "ransomware", "backdoor", "rat", "stealer",
@@ -44,6 +42,16 @@ def gh_request(url, is_raw=False):
     except Exception as e:
         print(f"Error: {e} → {url}", file=sys.stderr)
         return None
+
+def get_default_branch():
+    print("Detecting default branch...")
+    data = gh_request(f"https://api.github.com/repos/{RLABS_REPO}")
+    if data:
+        branch = json.loads(data).get("default_branch", "master")
+        print(f"Default branch: {branch}")
+        return branch
+    print("Could not detect branch, falling back to master")
+    return "master"
 
 def get_severity(path, rule_name):
     text = (path + " " + rule_name).lower()
@@ -104,8 +112,12 @@ def main():
     version     = now.strftime("%Y-%m")
     released_at = now.strftime("%Y-%m-01")
 
-    print(f"Fetching file tree from {RLABS_REPO}...")
-    tree_raw = gh_request(TREE_API)
+    branch   = get_default_branch()
+    tree_api = f"https://api.github.com/repos/{RLABS_REPO}/git/trees/{branch}?recursive=1"
+    raw_base = f"https://raw.githubusercontent.com/{RLABS_REPO}/{branch}/"
+
+    print(f"Fetching file tree from {RLABS_REPO} ({branch})...")
+    tree_raw = gh_request(tree_api)
     if not tree_raw:
         print("Failed to fetch tree", file=sys.stderr)
         sys.exit(1)
@@ -136,7 +148,7 @@ def main():
     all_rules, seen_ids = [], set()
 
     for i, path in enumerate(yara_files):
-        content = gh_request(RAW_BASE + path, is_raw=True)
+        content = gh_request(raw_base + path, is_raw=True)
         if not content:
             continue
         for rule in parse_yara(content, path):
