@@ -1,0 +1,171 @@
+{
+  "version": "2026-07",
+  "releasedAt": "2026-07-01",
+  "rules": [
+    {
+      "id": "ASPX_WEBSHELL",
+      "name": "ASPX Webshell",
+      "severity": "CRITICAL",
+      "description": "ASPX server-side webshell — executes system commands via Process or cmd.exe",
+      "patternType": "STRING",
+      "strings": ["new system.diagnostics.process", "processstart(\"cmd.exe\"", "request[\"cmd\"]"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "PYTHON_WEBSHELL",
+      "name": "Python Reverse Shell",
+      "severity": "CRITICAL",
+      "description": "Python os.system or subprocess shell execution embedded in non-Python files",
+      "patternType": "STRING + EXT",
+      "strings": ["import os;os.system(", "import socket,subprocess,os", "subprocess.popen(['/bin/sh'"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "BLACKCAT_RANSOMWARE",
+      "name": "BlackCat / ALPHV Ransomware",
+      "severity": "CRITICAL",
+      "description": "ALPHV/BlackCat ransomware payload strings detected",
+      "patternType": "STRING",
+      "strings": ["alphv_pub_key", "blackcat_ransomware", "recover-files.txt"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "CLOP_RANSOMWARE",
+      "name": "Cl0p Ransomware",
+      "severity": "CRITICAL",
+      "description": "Cl0p ransomware payload and ransom note strings",
+      "patternType": "STRING",
+      "strings": ["clop^_", "your network was hacked and your data", "ci0p"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "HIVE_RANSOMWARE",
+      "name": "Hive Ransomware",
+      "severity": "CRITICAL",
+      "description": "Hive ransomware group strings and ransom note patterns",
+      "patternType": "STRING",
+      "strings": ["hive_secret_key", "hiveransom", "hive-leak.site"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "DHARMA_RANSOMWARE",
+      "name": "Dharma / Phobos Ransomware",
+      "severity": "CRITICAL",
+      "description": "Dharma and Phobos ransomware payload strings",
+      "patternType": "STRING",
+      "strings": ["dharma_key", "id.dharma@", "phobos_ransomware", "backup.id@"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "BLACKMATTER_RANSOMWARE",
+      "name": "BlackMatter / DarkSide Ransomware",
+      "severity": "CRITICAL",
+      "description": "BlackMatter and DarkSide ransomware strings",
+      "patternType": "STRING",
+      "strings": ["blackmatter_onion", "darkside_key", "README.DarkSide"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "XMRIG_MINER",
+      "name": "XMRig Cryptocurrency Miner",
+      "severity": "HIGH",
+      "description": "XMRig Monero miner strings — used to mine crypto using victim CPU",
+      "patternType": "STRING",
+      "strings": ["xmrig", "cryptonight", "stratum+tcp://", "monero wallet"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "MIMIKATZ",
+      "name": "Mimikatz Credential Stealer",
+      "severity": "CRITICAL",
+      "description": "Mimikatz password dumping tool strings — extracts Windows credentials",
+      "patternType": "STRING",
+      "strings": ["sekurlsa::logonpasswords", "lsadump::sam", "mimikatz", "gentilkiwi"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "COBALT_STRIKE",
+      "name": "Cobalt Strike Beacon",
+      "severity": "CRITICAL",
+      "description": "Cobalt Strike C2 framework beacon strings used in targeted attacks",
+      "patternType": "STRING",
+      "strings": ["cobaltstrike", "beacon.dll", "sleep_mask", "cs_beacon"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "NJRAT_BACKDOOR",
+      "name": "njRAT Remote Access Trojan",
+      "severity": "CRITICAL",
+      "description": "njRAT backdoor strings — common in targeted attacks on educational institutions",
+      "patternType": "STRING",
+      "strings": ["njrat", "njw0rm", "bladabindi", "bin.yo0o"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "ASYNCRAT",
+      "name": "AsyncRAT",
+      "severity": "CRITICAL",
+      "description": "AsyncRAT remote access trojan payload strings",
+      "patternType": "STRING",
+      "strings": ["asyncrat", "async-rat", "aes_key_asyncrat", "pastebin.com/raw"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "REDLINE_STEALER",
+      "name": "RedLine Credential Stealer",
+      "severity": "CRITICAL",
+      "description": "RedLine stealer — harvests saved browser passwords, credit cards, crypto wallets",
+      "patternType": "STRING",
+      "strings": ["redline stealer", "redlinestealer", "grabber_telegram", "wallets_grabber"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "EMPIRE_POWERSHELL",
+      "name": "PowerShell Empire Framework",
+      "severity": "HIGH",
+      "description": "PowerShell Empire post-exploitation framework — used by attackers after initial access",
+      "patternType": "STRING",
+      "strings": ["powershell empire", "invoke-empire", "get-system empire", "empire agent"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    },
+    {
+      "id": "CREDENTIAL_DUMP",
+      "name": "Credential Dump Pattern",
+      "severity": "HIGH",
+      "description": "Generic credential harvesting strings found in stealer and RAT payloads",
+      "patternType": "STRING",
+      "strings": ["login data", "chrome passwords", "firefox logins.json", "credential_dump"],
+      "condition": "any",
+      "binaryOnly": false,
+      "nonBinaryOnly": false
+    }
+  ]
+}
