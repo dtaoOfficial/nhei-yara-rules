@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Auto-fetches YARA rules from reversinglabs/reversinglabs-yara-rules,
-converts text-string patterns to DTAO NAS JSON format,
-writes yara-rules.json.
+Downloads reversinglabs/reversinglabs-yara-rules as a zip,
+extracts .yara files, converts string patterns to DTAO NAS JSON.
+One download — no branch detection, no tree API calls.
 """
-import os, re, json, time, sys
+import os, re, json, sys, zipfile, io
 from datetime import datetime, timezone
 import urllib.request, urllib.error
 
@@ -18,40 +18,33 @@ PRIORITY_CATS = {
 
 SEVERITY_MAP = {
     "ransomware": "CRITICAL", "backdoor": "CRITICAL", "rat": "CRITICAL",
-    "stealer": "CRITICAL",    "webshell": "CRITICAL", "rootkit": "CRITICAL",
-    "miner": "HIGH",          "trojan": "HIGH",       "dropper": "HIGH",
-    "exploit": "HIGH",        "worm": "HIGH",         "downloader": "MEDIUM",
+    "stealer":    "CRITICAL", "webshell": "CRITICAL", "rootkit": "CRITICAL",
+    "miner":      "HIGH",     "trojan":   "HIGH",     "dropper": "HIGH",
+    "exploit":    "HIGH",     "worm":     "HIGH",     "downloader": "MEDIUM",
 }
 
 MAX_FILES = 80
 MAX_RULES = 150
 
-def gh_request(url, is_raw=False):
-    req = urllib.request.Request(url)
-    if GITHUB_TOKEN:
-        req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
-    if not is_raw:
-        req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("User-Agent", "DTAO-YARA-Converter/1.0")
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return r.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as e:
-        print(f"HTTP {e.code} → {url}", file=sys.stderr)
-        return None
-    except Exception as e:
-        print(f"Error: {e} → {url}", file=sys.stderr)
-        return None
 
-def get_default_branch():
-    print("Detecting default branch...")
-    data = gh_request(f"https://api.github.com/repos/{RLABS_REPO}")
-    if data:
-        branch = json.loads(data).get("default_branch", "master")
-        print(f"Default branch: {branch}")
-        return branch
-    print("Could not detect branch, falling back to master")
-    return "master"
+def download_zipball():
+    for branch in ["master", "main"]:
+        url = f"https://api.github.com/repos/{RLABS_REPO}/zipball/{branch}"
+        req = urllib.request.Request(url)
+        if GITHUB_TOKEN:
+            req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("User-Agent", "DTAO-YARA-Converter/1.0")
+        print(f"Trying branch: {branch} ...")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                data = r.read()
+            print(f"Downloaded {len(data) // 1024} KB from branch '{branch}'")
+            return data
+        except Exception as e:
+            print(f"  branch '{branch}' failed: {e}", file=sys.stderr)
+    return None
+
 
 def get_severity(path, rule_name):
     text = (path + " " + rule_name).lower()
@@ -59,6 +52,7 @@ def get_severity(path, rule_name):
         if kw in text:
             return sev
     return "HIGH"
+
 
 def parse_strings(section):
     seen, out = set(), []
@@ -71,9 +65,12 @@ def parse_strings(section):
             break
     return out
 
+
 def parse_yara(content, filepath):
     rules = []
-    for m in re.finditer(r'rule\s+(\w+)(?:\s*:\s*[\w\s]+)?\s*\{(.*?)\n\}', content, re.DOTALL):
+    for m in re.finditer(
+        r'rule\s+(\w+)(?:\s*:\s*[\w\s]+)?\s*\{(.*?)\n\}', content, re.DOTALL
+    ):
         name = m.group(1)
         body = m.group(2)
 
@@ -107,61 +104,58 @@ def parse_yara(content, filepath):
         })
     return rules
 
+
 def main():
-    now = datetime.now(timezone.utc)
+    now         = datetime.now(timezone.utc)
     version     = now.strftime("%Y-%m")
     released_at = now.strftime("%Y-%m-01")
 
-    branch   = get_default_branch()
-    tree_api = f"https://api.github.com/repos/{RLABS_REPO}/git/trees/{branch}?recursive=1"
-    raw_base = f"https://raw.githubusercontent.com/{RLABS_REPO}/{branch}/"
-
-    print(f"Fetching file tree from {RLABS_REPO} ({branch})...")
-    tree_raw = gh_request(tree_api)
-    if not tree_raw:
-        print("Failed to fetch tree", file=sys.stderr)
+    data = download_zipball()
+    if not data:
+        print("ERROR: Could not download repo zip from any branch", file=sys.stderr)
         sys.exit(1)
-
-    tree = json.loads(tree_raw)
-    all_files = [i["path"] for i in tree.get("tree", []) if i["type"] == "blob"]
-
-    yara_files = []
-    for path in all_files:
-        if not path.endswith(".yara"):
-            continue
-        parts = path.lower().split("/")
-        if any(cat in part for cat in PRIORITY_CATS for part in parts):
-            yara_files.append(path)
-
-    def priority(p):
-        pl = p.lower()
-        if "ransomware" in pl: return 0
-        if "backdoor" in pl or "rat" in pl: return 1
-        if "stealer" in pl or "webshell" in pl: return 2
-        if "miner" in pl or "exploit" in pl: return 3
-        return 4
-
-    yara_files.sort(key=priority)
-    yara_files = yara_files[:MAX_FILES]
-    print(f"Found {len(yara_files)} .yara files — converting...")
 
     all_rules, seen_ids = [], set()
 
-    for i, path in enumerate(yara_files):
-        content = gh_request(raw_base + path, is_raw=True)
-        if not content:
-            continue
-        for rule in parse_yara(content, path):
-            if rule["id"] not in seen_ids:
-                seen_ids.add(rule["id"])
-                all_rules.append(rule)
-        if i % 10 == 9:
-            time.sleep(1)
-        if len(all_rules) >= MAX_RULES:
-            break
-        print(f"  [{i+1}/{len(yara_files)}] {path}", end="\r")
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        yara_paths = [n for n in zf.namelist() if n.endswith(".yara")]
 
-    print(f"\nDone — {len(all_rules)} rules converted")
+        filtered = []
+        for path in yara_paths:
+            parts = path.lower().split("/")
+            if any(cat in part for cat in PRIORITY_CATS for part in parts):
+                filtered.append(path)
+
+        def priority(p):
+            pl = p.lower()
+            if "ransomware" in pl: return 0
+            if "backdoor"   in pl or "rat" in pl: return 1
+            if "stealer"    in pl or "webshell" in pl: return 2
+            if "miner"      in pl or "exploit"  in pl: return 3
+            return 4
+
+        filtered.sort(key=priority)
+        cap = min(len(filtered), MAX_FILES)
+        print(f"Found {len(filtered)} relevant .yara files — processing {cap}")
+
+        for i, path in enumerate(filtered[:cap]):
+            try:
+                content = zf.read(path).decode("utf-8", errors="replace")
+            except Exception as e:
+                print(f"  Skip {path}: {e}", file=sys.stderr)
+                continue
+
+            for rule in parse_yara(content, path):
+                if rule["id"] not in seen_ids:
+                    seen_ids.add(rule["id"])
+                    all_rules.append(rule)
+
+            print(f"  [{i+1}/{cap}] {path.split('/')[-1]}", end="\r")
+
+            if len(all_rules) >= MAX_RULES:
+                break
+
+    print(f"\nTotal rules converted: {len(all_rules)}")
 
     output = {
         "version":    version,
@@ -171,7 +165,9 @@ def main():
     }
     with open("yara-rules.json", "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
-    print(f"yara-rules.json written — version {version}, {len(all_rules)} rules")
+
+    print(f"Done — yara-rules.json written (version {version}, {len(all_rules)} rules)")
+
 
 if __name__ == "__main__":
     main()
