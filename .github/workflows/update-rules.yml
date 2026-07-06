@@ -1,0 +1,33 @@
+name: Update YARA Rules
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'   # runs automatically on 1st of every month
+  workflow_dispatch:        # allows manual run from GitHub UI anytime
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch and convert rules
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 convert.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "YARA Auto-Update Bot"
+          git config user.email "bot@dtaoofficial.com"
+          git add yara-rules.json
+          if git diff --cached --quiet; then
+            echo "Already up to date — no commit needed"
+          else
+            git commit -m "auto: update YARA rules $(date +%Y-%m)"
+            git push
+          fi
